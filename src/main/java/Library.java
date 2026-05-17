@@ -43,7 +43,7 @@ public class Library {
          @Override
          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
            if (isSupportedFormat(file)) {
-             if(cachedPaths.contains(file)) {
+             if(cachedPaths.contains(file.toString())) {
                return FileVisitResult.CONTINUE;
              }else {
                Track track = new Track();
