@@ -51,6 +51,18 @@ public void insertTrack(Track track) {
         e.printStackTrace();
     }
 }
+public void deleteTrack(String filePath) {
+    String deleteSQL = "DELETE FROM tracks WHERE filePath = ?";
+    try (Connection conn = getConnection();
+    java.sql.PreparedStatement pstmt = conn.prepareStatement(deleteSQL)) {
+        pstmt.setString(1, filePath);
+        pstmt.executeUpdate();
+
+    } catch (SQLException f) {
+        f.printStackTrace();
+    }
+
+}
 public HashSet<String> getAllStoredPaths() {
     HashSet<String> paths = new HashSet<>();
     String querySQL = "SELECT filePath FROM tracks;";

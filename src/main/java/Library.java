@@ -37,6 +37,7 @@ public class Library {
      Path path = searchPath();
      dbManager.SetupDatabase();
      HashSet<String> cachedPaths = dbManager.getAllStoredPaths();
+     HashSet<String> visitedPaths = new HashSet<>();
 
      try { 
        Files.walkFileTree(path, new SimpleFileVisitor<Path>()   {
@@ -44,21 +45,26 @@ public class Library {
          public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
            if (isSupportedFormat(file)) {
              if(cachedPaths.contains(file.toString())) {
-               return FileVisitResult.CONTINUE;
+              visitedPaths.add(file.toString());
+              return FileVisitResult.CONTINUE;
              }else {
                Track track = new Track();
                track.setFilePath(file.toString());
                track.loadMetadata();
                dbManager.insertTrack(track);
-
-             } 
-            
-        
+             }
+             
+           
            } return FileVisitResult.CONTINUE;
 
          }
 
        });
+        for (String cachedPath : cachedPaths) {
+          if (!visitedPaths.contains(cachedPath)) {
+            dbManager.deleteTrack(cachedPath);
+          }
+        }
        loadLibrary();
      } 
      catch (IOException e) {
@@ -69,6 +75,7 @@ public class Library {
 
  public void loadLibrary() {
    this.activeTracks = dbManager.getAllTracks();
+  
 }
     public ArrayList<Track> getActiveTracks() {
         return activeTracks;

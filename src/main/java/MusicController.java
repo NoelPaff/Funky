@@ -1,6 +1,8 @@
+
 import java.io.File;
 import javazoom.jl.player.Player;
 import java.io.FileInputStream;
+import java.util.concurrent.*;
 
 
 public class MusicController implements PlaybackEngine {
@@ -9,11 +11,20 @@ public class MusicController implements PlaybackEngine {
     private boolean repeat;
     private Player currentPlayer;
     private Thread playbackThread;
+    private String currentFilePath;
+    private FileInputStream fis;
+    private volatile boolean isPaused;
+    private Track currentTrack;
+    private final Object lock = new Object();
+    private final Library library;
   
 
-    public MusicController() {
+    public MusicController(Library library) {
+        this.library = library;
         this.volume = 0.5;
         this.repeat = false;
+        
+
        
         
     }
@@ -21,16 +32,42 @@ public class MusicController implements PlaybackEngine {
         // Implementation to open a music file
     }
 
-    public void play(Track track) {
-        stop();
-        String filePath = track.getFilePath();
+    public void play(Track track, int position) {
+        this.currentFilePath = track.getFilePath();
+        this.isPaused = false;
+        this.currentTrack = track;
+        
+        
+        stop(); 
         this.playbackThread= new Thread(() -> {
-            try(FileInputStream fis = new FileInputStream(filePath)) {
-                this.currentPlayer= new Player(fis);
-                this.currentPlayer.play();
+    
+            try(FileInputStream fis = new FileInputStream(currentFilePath)) {
+                fis.skip(position);
+                this.currentPlayer = new Player(fis);
+                while (true) {
+                    synchronized (lock) {
+                        while (isPaused) {
+                            try {
+                                lock.wait();
+                            } catch (InterruptedException e) {
+                                return;
+                            }
+                        }
+                    }
+                    
+                boolean canContinue = false;
+                if (currentPlayer != null) {
+                   canContinue = currentPlayer.play(1); 
+                }
 
-            } catch (Exception e) {
-                e.printStackTrace();
+                if (!canContinue) {
+                    break; 
+                }
+                }
+
+
+            } catch (Exception f) {
+                f.printStackTrace();
             } finally {
                 cleanup();
             }
@@ -40,9 +77,21 @@ public class MusicController implements PlaybackEngine {
     }
 
 
+
     public void pause() {
-        
+        if (playbackThread != null && playbackThread.isAlive()) {
+            isPaused = true; 
+        }
     }
+    public void resume() {
+        if (isPaused) {
+            synchronized (lock) {
+                isPaused = false;
+                lock.notifyAll();
+            }
+        }
+    }
+            
 
     public void stop() {
           if (currentPlayer != null) {
@@ -56,20 +105,64 @@ public class MusicController implements PlaybackEngine {
         }
     
 
-    public void seek(double position) {
-        // Implementation to seek to a specific position in the current track
+    public int seek(int position) {
+        if (currentPlayer != null) {
+           return position;
+            
+        }
+        return 0;
+    }
+            
+    public void next() {
+        try {
+            play(library.getActiveTracks().get(library.getActiveTracks().indexOf(currentTrack) + 1), 0);
+
+        }catch (IndexOutOfBoundsException e) {
+            play(library.getActiveTracks().get(0), 0);
+        }
+        
+        
     }
 
-    public void next() {
-        // Implementation to play the next track in the playlist
-    }
 
     public void previous() {
-        // Implementation to play the previous track in the playlist    
+        try {
+            play(library.getActiveTracks().get(library.getActiveTracks().indexOf(currentTrack) - 1), 0);
+
+        }catch (IndexOutOfBoundsException e) {
+            play(library.getActiveTracks().get(library.getActiveTracks().size() - 1), 0);
+        } 
     }
-    public void cleanup() {
-       this.currentPlayer = null;
-    this.playbackThread = null;    
+
+    public void repeat() {
+        if (currentTrack != null && repeat) {
+           while (repeat) {
+               play(currentTrack, 0);
+           }  
+        }
         
+    }
+
+
+
+    public void cleanup() {
+       if (currentPlayer != null) {
+           try {
+               currentPlayer.close();
+           } catch (Exception e) {
+               // ignore
+           }
+           currentPlayer = null;
+       }
+       if (playbackThread != null) {
+           try {
+               if (playbackThread.isAlive()) {
+                   playbackThread.interrupt();
+               }
+           } catch (Exception e) {
+               // ignore
+           }
+           playbackThread = null;
+       }
     }
 }
