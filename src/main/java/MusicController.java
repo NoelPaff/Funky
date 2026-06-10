@@ -33,17 +33,20 @@ public class MusicController implements PlaybackEngine {
     }
 
     public void play(Track track, int position) {
-        this.currentFilePath = track.getFilePath();
+        final String filePath = track.getFilePath();
+        this.currentFilePath = filePath;
         this.isPaused = false;
         this.currentTrack = track;
         
         
         stop(); 
-        this.playbackThread= new Thread(() -> {
+        Thread nextPlaybackThread = new Thread(() -> {
     
-            try(FileInputStream fis = new FileInputStream(currentFilePath)) {
+            Player localPlayer = null;
+            try(FileInputStream fis = new FileInputStream(filePath)) {
                 fis.skip(position);
-                this.currentPlayer = new Player(fis);
+                localPlayer = new Player(fis);
+                this.currentPlayer = localPlayer;
                 while (true) {
                     synchronized (lock) {
                         while (isPaused) {
@@ -56,8 +59,8 @@ public class MusicController implements PlaybackEngine {
                     }
                     
                 boolean canContinue = false;
-                if (currentPlayer != null) {
-                   canContinue = currentPlayer.play(1); 
+                     if (localPlayer != null) {
+                         canContinue = localPlayer.play(1); 
                 }
 
                 if (!canContinue) {
@@ -69,11 +72,12 @@ public class MusicController implements PlaybackEngine {
             } catch (Exception f) {
                 f.printStackTrace();
             } finally {
-                cleanup();
+                cleanup(localPlayer, Thread.currentThread());
             }
 
         });
-        playbackThread.start();
+        this.playbackThread = nextPlaybackThread;
+        nextPlaybackThread.start();
     }
 
 
@@ -146,23 +150,99 @@ public class MusicController implements PlaybackEngine {
 
 
     public void cleanup() {
-       if (currentPlayer != null) {
+       cleanup(currentPlayer, playbackThread);
+    }
+
+    private void cleanup(Player playerToClose, Thread threadToClear) {
+       if (playerToClose != null) {
            try {
-               currentPlayer.close();
+               playerToClose.close();
            } catch (Exception e) {
                // ignore
            }
-           currentPlayer = null;
+           if (currentPlayer == playerToClose) {
+               currentPlayer = null;
+           }
        }
-       if (playbackThread != null) {
+       if (threadToClear != null) {
            try {
-               if (playbackThread.isAlive()) {
-                   playbackThread.interrupt();
+               if (threadToClear.isAlive()) {
+                   threadToClear.interrupt();
                }
            } catch (Exception e) {
                // ignore
            }
-           playbackThread = null;
+           if (playbackThread == threadToClear) {
+               playbackThread = null;
+           }
        }
+    }
+    public boolean getIsPaused(){
+        return isPaused;
+    }
+
+    // Getters and setters
+    public double getVolume() {
+        return volume;
+    }
+
+    public void setVolume(double volume) {
+        this.volume = volume;
+    }
+
+    public boolean isRepeat() {
+        return repeat;
+    }
+
+    public void setRepeat(boolean repeat) {
+        this.repeat = repeat;
+    }
+
+    public Player getCurrentPlayer() {
+        return currentPlayer;
+    }
+
+    public void setCurrentPlayer(Player currentPlayer) {
+        this.currentPlayer = currentPlayer;
+    }
+
+    public Thread getPlaybackThread() {
+        return playbackThread;
+    }
+
+    public void setPlaybackThread(Thread playbackThread) {
+        this.playbackThread = playbackThread;
+    }
+
+    public String getCurrentFilePath() {
+        return currentFilePath;
+    }
+
+    public void setCurrentFilePath(String currentFilePath) {
+        this.currentFilePath = currentFilePath;
+    }
+
+    public FileInputStream getFis() {
+        return fis;
+    }
+
+    public void setFis(FileInputStream fis) {
+        this.fis = fis;
+    }
+
+    public void setIsPaused(boolean isPaused) {
+        this.isPaused = isPaused;
+    }
+
+    public Track getCurrentTrack() {
+        return currentTrack;
+    }
+
+    public void setCurrentTrack(Track currentTrack) {
+        this.currentTrack = currentTrack;
+    }
+
+    public Library getLibrary() {
+        return library;
     }
 }
